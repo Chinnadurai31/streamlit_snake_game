@@ -54,6 +54,29 @@ jobs:
           push: true
           tags: chinnadurai123/steamlit_game:game-${{ github.run_number }}
 
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
+
+      - name: Scan the image and store the output 
+        id: trivy-scan
+        run: |
+          trivy image --severity LOW,MEDIUM,HIGH,CRITICAL chinnadurai123/steamlit_game:game-${{ github.run_number }} > trivy-report.txt
+      - name: Send Trivy report to Slack
+        run: |
+          scan_output=$(cat trivy-report.txt)
+          payload=$(jq -n --arg text "$scan_output" '{text: $text, username: " Github-actions:CI/CD "}')
+          curl -X POST -H 'Content-type: application/json' --data "$payload" ${{ secrets.SLACK_WEBHOOK_URL }}
+
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+
       - name: Send dockerhub delivery status to Slack
         run: |
           repository_name=$(echo "${{ github.repository }}" | cut -d '/' -f 2)
