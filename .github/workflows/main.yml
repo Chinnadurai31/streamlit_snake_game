@@ -1,4 +1,4 @@
-name: cd
+name: ci/cd 
 
 on:
   push:
@@ -53,3 +53,10 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: chinnadurai123/steamlit_game:game-${{ github.run_number }}
+
+      - name: Send dockerhub delivery status to Slack
+        run: |
+          repository_name=$(echo "${{ github.repository }}" | cut -d '/' -f 2)
+          image_tag=$(echo "${GITHUB_SHA::8}")
+          deployment_msg="{\"text\": \"Image chinnadurai123/steamlit_game:game-${{ github.run_number }} is pushed to DockerHub👍️.\", \"username\": \"CI/CD bot\"}"
+          curl -X POST -H 'Content-type: application/json' --data "$deployment_msg" ${{ secrets.SLACK_WEBHOOK_URL }}
