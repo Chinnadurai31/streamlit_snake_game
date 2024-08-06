@@ -31,17 +31,20 @@ jobs:
       - name: Check SonarQube Quality Gate
         id: quality-gate
         run: |
-          result=$(curl -u ${{ secrets.SONAR_TOKEN }}: ${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=test)
+          result=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: ${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=test)
           echo "SonarQube quality gate result: $result"
           if echo "$result" | grep -q '"status":"ERROR"'; then
             echo "SonarQube scan failed."
             echo "SonarQube Scan Failed" > sonarqube-failure-report.txt
+            echo "failure" > result.txt
             exit 1
+          else
+            echo "success" > result.txt
           fi
 
       # Send SonarQube Scan Failure Message to Slack
       - name: Send SonarQube Scan Failure Message to Slack
-        if: failure() && steps.quality-gate.outcome == 'failure'
+        if: needs.quality-gate.result == 'failure'
         run: |
           payload=$(jq -n --arg text "SonarQube Scan Failed" '{text: $text}')
           echo "Payload to be sent to Slack:"
@@ -50,7 +53,7 @@ jobs:
 
       # Build and Push Docker Image (only if SonarQube scan is successful)
       - name: Build and Push Docker Image
-        if: success() # This ensures the build step only runs if previous steps were successful
+        if: steps.quality-gate.outputs.result == 'success' # Continue only if SonarQube scan was successful
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -60,7 +63,7 @@ jobs:
 
       # Install and Scan with Trivy
       - name: Install Trivy
-        if: success() # This ensures the installation only runs if previous steps were successful
+        if: success() # Continue only if previous steps were successful
         run: |
           sudo apt-get update
           sudo apt-get install -y wget apt-transport-https gnupg lsb-release
@@ -70,14 +73,14 @@ jobs:
           sudo apt-get install -y trivy
 
       - name: Scan the Docker image and store the output
-        if: success() # This ensures the scan only runs if previous steps were successful
+        if: success() # Continue only if previous steps were successful
         id: trivy-scan
         run: |
           trivy image --severity LOW,MEDIUM,HIGH,CRITICAL chinnadurai123/steamlit_game:game-${{ github.run_number }} > trivy-report.txt
 
       # Send Trivy Report to Slack
       - name: Send Trivy Report to Slack
-        if: success() # This ensures the report only runs if previous steps were successful
+        if: success() # Continue only if previous steps were successful
         run: |
           scan_output=$(cat trivy-report.txt)
           payload=$(jq -n --arg text "$scan_output" '{text: $text, username: "Github-actions:CI/CD"}')
@@ -87,7 +90,7 @@ jobs:
 
       # Notify Docker Hub Delivery Status to Slack
       - name: Send Docker Hub Delivery Status to Slack
-        if: success() # This ensures the notification only runs if previous steps were successful
+        if: success() # Continue only if previous steps were successful
         run: |
           deployment_msg="{\"text\": \"Image chinnadurai123/steamlit_game:game-${{ github.run_number }} is pushed to DockerHub👍️.\", \"username\": \"CI/CD bot\"}"
           curl -X POST -H 'Content-type: application/json' --data "$deployment_msg" ${{ secrets.SLACK_WEBHOOK_URL }}
