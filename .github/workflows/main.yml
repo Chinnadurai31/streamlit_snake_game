@@ -40,4 +40,4 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: chinnadurai123/steamlit_game:${{ github.run_number }}
+          tags: chinnadurai123/steamlit_game:game-${{ github.run_number }}
