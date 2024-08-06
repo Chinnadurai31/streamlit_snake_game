@@ -16,14 +16,13 @@ jobs:
           fetch-depth: 0
 
       - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@v2
+        uses: sonarsource/sonarqube-scan-action@master
         with:
           args: |
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
             -Dsonar.projectName=${{ secrets.SONAR_PROJECT_NAME }}
-#            -Dsonar.projectVersion=${{ secrets.SONAR_PROJECT_VERSION }}
-            -Dsonar.sources=.
-        env:
+            # -Dsonar.projectVersion=${{ secrets.SONAR_PROJECT_VERSION }}
+            # -Dsonar.sources=.
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
