@@ -19,7 +19,7 @@ jobs:
         uses: sonarsource/sonarqube-scan-action@master
         with:
           args: |
-            -Dsonar.projectKey=sonar.projectKey=test
+            -Dsonar.projectKey=test
             -Dsonar.projectName=test
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
