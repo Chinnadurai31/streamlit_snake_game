@@ -15,7 +15,7 @@ jobs:
         with:
           fetch-depth: 0
 
-#=================================================Sonarqube scanning========================================
+      # SonarQube Scan
       - name: SonarQube Scan
         id: sonarqube
         uses: sonarsource/sonarqube-scan-action@master
@@ -27,36 +27,29 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-      - name: Check SonarQube Scan Status
-        id: check_sonarqube
+      # Check SonarQube Quality Gate Status
+      - name: Check SonarQube Quality Gate
+        id: quality-gate
         run: |
           result=$(curl -u ${{ secrets.SONAR_TOKEN }}: ${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=test)
-          status=$(echo "$result" | jq -r '.projectStatus.status')
-
-          if [ "$status" != "OK" ]; then
-            echo "SonarQube scan failed. Status: $status"
-            echo "SonarQube scan results: $result" > sonarqube-failure-report.txt
+          echo "SonarQube quality gate result: $result"
+          if echo "$result" | grep -q '"status":"ERROR"'; then
+            echo "SonarQube scan failed."
+            echo "$result" > sonarqube-failure-report.txt
             exit 1
-          else
-            echo "SonarQube scan passed."
           fi
 
-#===========================================Send Sonarqube scan report to SLACK channel==========================
+      # Send SonarQube Results to Slack if failed
       - name: Send SonarQube Results to Slack
-        if: failure()  # Send Slack message only if SonarQube scan fails
+        if: failure() && steps.quality-gate.outcome == 'failure'
         run: |
-          curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"SonarQube Scan Failed:\n$(cat sonarqube-failure-report.txt)\"}" ${{ secrets.SLACK_WEBHOOK_URL }}
+          result=$(cat sonarqube-failure-report.txt)
+          payload=$(jq -n --arg text "SonarQube Scan Failed:\n$result" '{text: $text}')
+          echo "Payload to be sent to Slack:"
+          echo "$payload"
+          curl -X POST -H 'Content-type: application/json' --data "$payload" ${{ secrets.SLACK_WEBHOOK_URL }}
 
-#========================================Build,push Docker image==========================================================
-      - name: Cache Docker layers
-        uses: actions/cache@v3
-        with:
-          path: |
-            /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
+      # Build and Push Docker Image
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -67,25 +60,14 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build and Push Docker Image
-        if: success()  # Only run this if SonarQube scan is successful
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: chinnadurai123/steamlit_game:game-${{ github.run_number }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache
 
-#================================================Scan the Docker image with Trivy=========================================
-      - name: Cache Trivy database
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/trivy
-          key: trivy-db-${{ runner.os }}-${{ github.sha }}
-          restore-keys: |
-            trivy-db-${{ runner.os }}-
-
+      # Install and Scan with Trivy
       - name: Install Trivy
         run: |
           sudo apt-get update
@@ -95,23 +77,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y trivy
 
-      - name: Scan the image and store the output 
+      - name: Scan the Docker image and store the output
         id: trivy-scan
         run: |
           trivy image --severity LOW,MEDIUM,HIGH,CRITICAL chinnadurai123/steamlit_game:game-${{ github.run_number }} > trivy-report.txt
 
-      - name: Send Trivy report to Slack
+      # Send Trivy Report to Slack
+      - name: Send Trivy Report to Slack
         run: |
           scan_output=$(cat trivy-report.txt)
-          payload=$(jq -n --arg text "$scan_output" '{text: $text, username: " Github-actions:CI/CD "}')
+          payload=$(jq -n --arg text "$scan_output" '{text: $text, username: "Github-actions:CI/CD"}')
+          echo "Payload to be sent to Slack:"
+          echo "$payload"
           curl -X POST -H 'Content-type: application/json' --data "$payload" ${{ secrets.SLACK_WEBHOOK_URL }}
 
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      - name: Send Docker Hub delivery status to Slack
+      # Notify Docker Hub Delivery Status to Slack
+      - name: Send Docker Hub Delivery Status to Slack
         run: |
-          repository_name=$(echo "${{ github.repository }}" | cut -d '/' -f 2)
-          image_tag=$(echo "${GITHUB_SHA::8}")
           deployment_msg="{\"text\": \"Image chinnadurai123/steamlit_game:game-${{ github.run_number }} is pushed to DockerHub👍️.\", \"username\": \"CI/CD bot\"}"
           curl -X POST -H 'Content-type: application/json' --data "$deployment_msg" ${{ secrets.SLACK_WEBHOOK_URL }}
