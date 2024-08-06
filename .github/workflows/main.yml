@@ -44,7 +44,7 @@ jobs:
         if: failure() && steps.quality-gate.outcome == 'failure'
         run: |
           result=$(cat sonarqube-failure-report.txt)
-          payload=$(jq -n --arg text "SonarQube Scan Failed:\n$result" '{text: $text}')
+          payload=$(jq -n --arg text "SonarQube Scan Failed Please fix the bugs in Sonarqube reports)
           echo "Payload to be sent to Slack:"
           echo "$payload"
           curl -X POST -H 'Content-type: application/json' --data "$payload" ${{ secrets.SLACK_WEBHOOK_URL }}
