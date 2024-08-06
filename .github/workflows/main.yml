@@ -21,7 +21,7 @@ jobs:
           args: |
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
             -Dsonar.projectName=${{ secrets.SONAR_PROJECT_NAME }}
-            -Dsonar.projectVersion=${{ secrets.SONAR_PROJECT_VERSION }}
+#            -Dsonar.projectVersion=${{ secrets.SONAR_PROJECT_VERSION }}
             -Dsonar.sources=.
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
