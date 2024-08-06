@@ -17,6 +17,7 @@ jobs:
 
 #=================================================Sonarqube scanning========================================
       - name: SonarQube Scan
+        id: sonarqube
         uses: sonarsource/sonarqube-scan-action@master
         with:
           args: |
@@ -26,17 +27,25 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
+      - name: Check SonarQube Scan Status
+        id: check_sonarqube
+        run: |
+          result=$(curl -u ${{ secrets.SONAR_TOKEN }}: ${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=test)
+          status=$(echo "$result" | jq -r '.projectStatus.status')
+
+          if [ "$status" != "OK" ]; then
+            echo "SonarQube scan failed. Status: $status"
+            echo "SonarQube scan results: $result" > sonarqube-failure-report.txt
+            exit 1
+          else
+            echo "SonarQube scan passed."
+          fi
+
 #===========================================Send Sonarqube scan report to SLACK channel==========================
       - name: Send SonarQube Results to Slack
+        if: failure()  # Send Slack message only if SonarQube scan fails
         run: |
-          # Fetch issues from SonarQube
-          result=$(curl -u ${{ secrets.SONAR_TOKEN }}: ${{ secrets.SONAR_HOST_URL }}/api/issues/search?projectKeys=test)
-          
-          # Format the result (example: extract summary)
-          summary=$(echo "$result" | jq '.total')
-
-          # Send the summary to Slack
-          curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"SonarQube Scan Results:\nTotal Issues: $summary\"}" ${{ secrets.SLACK_WEBHOOK_URL }}
+          curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"SonarQube Scan Failed:\n$(cat sonarqube-failure-report.txt)\"}" ${{ secrets.SLACK_WEBHOOK_URL }}
 
 #========================================Build,push Docker image==========================================================
       - name: Cache Docker layers
@@ -58,6 +67,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build and Push Docker Image
+        if: success()  # Only run this if SonarQube scan is successful
         uses: docker/build-push-action@v5
         with:
           context: .
