@@ -19,8 +19,8 @@ jobs:
         uses: sonarsource/sonarqube-scan-action@master
         with:
           args: |
-            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
-            -Dsonar.projectName=${{ secrets.SONAR_PROJECT_NAME }}
+            -Dsonar.projectKey=sonar.projectKey=test
+            -Dsonar.projectName=test
             # Uncomment and set these if needed
             # -Dsonar.projectVersion=${{ secrets.SONAR_PROJECT_VERSION }}
             # -Dsonar.sources=.
