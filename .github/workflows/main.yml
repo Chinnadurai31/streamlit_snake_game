@@ -25,6 +25,18 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
+      - name: Send SonarQube Results to Slack
+        run: |
+          # Fetch issues from SonarQube
+          result=$(curl -u ${{ secrets.SONAR_TOKEN }}: ${{ secrets.SONAR_HOST_URL }}/api/issues/search?projectKeys=test)
+          
+          # Format the result (example: extract summary)
+          summary=$(echo "$result" | jq '.total')
+
+          # Send the summary to Slack
+          curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"SonarQube Scan Results:\nTotal Issues: $summary\"}" ${{ secrets.SLACK_WEBHOOK_URL }}
+
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
