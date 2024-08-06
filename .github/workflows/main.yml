@@ -1,103 +1,103 @@
-name: CI/CD
+# name: CI/CD
 
-on:
-  push:
-    branches:
-      - "main"
+# on:
+#   push:
+#     branches:
+#       - "main"
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
 
-      # SonarQube Scan
-      - name: SonarQube Scan
-        id: sonarqube
-        uses: sonarsource/sonarqube-scan-action@master
-        with:
-          args: |
-            -Dsonar.projectKey=test
-            -Dsonar.projectName=test
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+#       # SonarQube Scan
+#       - name: SonarQube Scan
+#         id: sonarqube
+#         uses: sonarsource/sonarqube-scan-action@master
+#         with:
+#           args: |
+#             -Dsonar.projectKey=test
+#             -Dsonar.projectName=test
+#         env:
+#           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-      # Check SonarQube Quality Gate Status and exit with the appropriate code
-      - name: Check SonarQube Quality Gate
-        id: quality-gate
-        run: |
-          result=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: ${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=test)
-          echo "SonarQube quality gate result: $result"
-          if echo "$result" | grep -q '"status":"ERROR"'; then
-            echo "SonarQube scan failed."
-            echo "SonarQube Scan Failed" > sonarqube-failure-report.txt
-            exit 1
-          else
-            echo "SonarQube scan passed."
-            exit 0
-          fi
+#       # Check SonarQube Quality Gate Status and exit with the appropriate code
+#       - name: Check SonarQube Quality Gate
+#         id: quality-gate
+#         run: |
+#           result=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: ${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=test)
+#           echo "SonarQube quality gate result: $result"
+#           if echo "$result" | grep -q '"status":"ERROR"'; then
+#             echo "SonarQube scan failed."
+#             echo "SonarQube Scan Failed" > sonarqube-failure-report.txt
+#             exit 1
+#           else
+#             echo "SonarQube scan passed."
+#             exit 0
+#           fi
 
-      # Send SonarQube Scan Failure Message to Slack
-      - name: Send SonarQube Scan Failure Message to Slack
-        if: failure()
-        run: |
-          payload=$(jq -n --arg text "SonarQube Scan Failed" '{text: $text}')
-          echo "Payload to be sent to Slack:"
-          echo "$payload"
-          curl -X POST -H 'Content-type: application/json' --data "$payload" ${{ secrets.SLACK_WEBHOOK_URL }}
+#       # Send SonarQube Scan Failure Message to Slack
+#       - name: Send SonarQube Scan Failure Message to Slack
+#         if: failure()
+#         run: |
+#           payload=$(jq -n --arg text "SonarQube Scan Failed" '{text: $text}')
+#           echo "Payload to be sent to Slack:"
+#           echo "$payload"
+#           curl -X POST -H 'Content-type: application/json' --data "$payload" ${{ secrets.SLACK_WEBHOOK_URL }}
 
-      # Build and Push Docker Image (only if SonarQube scan is successful)
-      - name: Login to Docker Hub
-        if: success()
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#       # Build and Push Docker Image (only if SonarQube scan is successful)
+#       - name: Login to Docker Hub
+#         if: success()
+#         uses: docker/login-action@v3
+#         with:
+#           username: ${{ secrets.DOCKERHUB_USERNAME }}
+#           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and Push Docker Image
-        if: success()
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: chinnadurai123/steamlit_game:game-${{ github.run_number }}
+#       - name: Build and Push Docker Image
+#         if: success()
+#         uses: docker/build-push-action@v5
+#         with:
+#           context: .
+#           file: ./Dockerfile
+#           push: true
+#           tags: chinnadurai123/steamlit_game:game-${{ github.run_number }}
 
-      # Install and Scan with Trivy
-      - name: Install Trivy
-        if: success()
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-          echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update
-          sudo apt-get install -y trivy
+#       # Install and Scan with Trivy
+#       - name: Install Trivy
+#         if: success()
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+#           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+#           echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
+#           sudo apt-get update
+#           sudo apt-get install -y trivy
 
-      - name: Scan the Docker image and store the output
-        if: success()
-        id: trivy-scan
-        run: |
-          trivy image --severity LOW,MEDIUM,HIGH,CRITICAL chinnadurai123/steamlit_game:game-${{ github.run_number }} > trivy-report.txt
+#       - name: Scan the Docker image and store the output
+#         if: success()
+#         id: trivy-scan
+#         run: |
+#           trivy image --severity LOW,MEDIUM,HIGH,CRITICAL chinnadurai123/steamlit_game:game-${{ github.run_number }} > trivy-report.txt
 
-      # Send Trivy Report to Slack
-      - name: Send Trivy Report to Slack
-        if: success()
-        run: |
-          scan_output=$(cat trivy-report.txt)
-          payload=$(jq -n --arg text "$scan_output" '{text: $text, username: "Github-actions:CI/CD"}')
-          echo "Payload to be sent to Slack:"
-          echo "$payload"
-          curl -X POST -H 'Content-type: application/json' --data "$payload" ${{ secrets.SLACK_WEBHOOK_URL }}
+#       # Send Trivy Report to Slack
+#       - name: Send Trivy Report to Slack
+#         if: success()
+#         run: |
+#           scan_output=$(cat trivy-report.txt)
+#           payload=$(jq -n --arg text "$scan_output" '{text: $text, username: "Github-actions:CI/CD"}')
+#           echo "Payload to be sent to Slack:"
+#           echo "$payload"
+#           curl -X POST -H 'Content-type: application/json' --data "$payload" ${{ secrets.SLACK_WEBHOOK_URL }}
 
-      # Notify Docker Hub Delivery Status to Slack
-      - name: Send Docker Hub Delivery Status to Slack
-        if: success()
-        run: |
-          deployment_msg="{\"text\": \"Image chinnadurai123/steamlit_game:game-${{ github.run_number }} is pushed to DockerHub👍️.\", \"username\": \"CI/CD bot\"}"
-          curl -X POST -H 'Content-type: application/json' --data "$deployment_msg" ${{ secrets.SLACK_WEBHOOK_URL }}
+#       # Notify Docker Hub Delivery Status to Slack
+#       - name: Send Docker Hub Delivery Status to Slack
+#         if: success()
+#         run: |
+#           deployment_msg="{\"text\": \"Image chinnadurai123/steamlit_game:game-${{ github.run_number }} is pushed to DockerHub👍️.\", \"username\": \"CI/CD bot\"}"
+#           curl -X POST -H 'Content-type: application/json' --data "$deployment_msg" ${{ secrets.SLACK_WEBHOOK_URL }}
