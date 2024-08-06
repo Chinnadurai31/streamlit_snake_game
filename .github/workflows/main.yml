@@ -27,22 +27,24 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-      # Check SonarQube Quality Gate Status and set result variable
+      # Check SonarQube Quality Gate Status and exit with the appropriate code
       - name: Check SonarQube Quality Gate
         id: quality-gate
         run: |
           result=$(curl -s -u ${{ secrets.SONAR_TOKEN }}: ${{ secrets.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=test)
           echo "SonarQube quality gate result: $result"
           if echo "$result" | grep -q '"status":"ERROR"'; then
-            echo "::set-output name=result::failure"
+            echo "SonarQube scan failed."
             echo "SonarQube Scan Failed" > sonarqube-failure-report.txt
+            exit 1
           else
-            echo "::set-output name=result::success"
+            echo "SonarQube scan passed."
+            exit 0
           fi
 
       # Send SonarQube Scan Failure Message to Slack
       - name: Send SonarQube Scan Failure Message to Slack
-        if: steps.quality-gate.outputs.result == 'failure'
+        if: failure()
         run: |
           payload=$(jq -n --arg text "SonarQube Scan Failed" '{text: $text}')
           echo "Payload to be sent to Slack:"
@@ -51,13 +53,14 @@ jobs:
 
       # Build and Push Docker Image (only if SonarQube scan is successful)
       - name: Login to Docker Hub
+        if: success()
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and Push Docker Image
-        if: steps.quality-gate.outputs.result == 'success'
+        if: success()
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -67,7 +70,7 @@ jobs:
 
       # Install and Scan with Trivy
       - name: Install Trivy
-        if: steps.quality-gate.outputs.result == 'success'
+        if: success()
         run: |
           sudo apt-get update
           sudo apt-get install -y wget apt-transport-https gnupg lsb-release
@@ -77,14 +80,14 @@ jobs:
           sudo apt-get install -y trivy
 
       - name: Scan the Docker image and store the output
-        if: steps.quality-gate.outputs.result == 'success'
+        if: success()
         id: trivy-scan
         run: |
           trivy image --severity LOW,MEDIUM,HIGH,CRITICAL chinnadurai123/steamlit_game:game-${{ github.run_number }} > trivy-report.txt
 
       # Send Trivy Report to Slack
       - name: Send Trivy Report to Slack
-        if: steps.quality-gate.outputs.result == 'success'
+        if: success()
         run: |
           scan_output=$(cat trivy-report.txt)
           payload=$(jq -n --arg text "$scan_output" '{text: $text, username: "Github-actions:CI/CD"}')
@@ -94,7 +97,7 @@ jobs:
 
       # Notify Docker Hub Delivery Status to Slack
       - name: Send Docker Hub Delivery Status to Slack
-        if: steps.quality-gate.outputs.result == 'success'
+        if: success()
         run: |
           deployment_msg="{\"text\": \"Image chinnadurai123/steamlit_game:game-${{ github.run_number }} is pushed to DockerHub👍️.\", \"username\": \"CI/CD bot\"}"
           curl -X POST -H 'Content-type: application/json' --data "$deployment_msg" ${{ secrets.SLACK_WEBHOOK_URL }}
